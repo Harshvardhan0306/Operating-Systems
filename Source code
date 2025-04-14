@@ -1,0 +1,117 @@
+import threading
+import time
+import random
+import tkinter as tk
+from tkinter import ttk, Canvas
+
+# Shared resource and semaphore for synchronization
+semaphore = threading.Semaphore(2)
+resource_lock = threading.Lock()
+
+# GUI Setup
+root = tk.Tk()
+root.title("Multithreading Models Simulator")
+root.geometry("800x600")
+
+log_text = tk.Text(root, height=15, width=80)
+log_text.pack()
+
+canvas = Canvas(root, width=700, height=300, bg="white")
+canvas.pack()
+
+thread_positions = {}  # Dictionary to track thread positions
+
+def log_activity(message):
+    log_text.insert(tk.END, message + "\n")
+    log_text.see(tk.END)
+    root.update_idletasks()
+
+def draw_thread(x, y, color, text):
+    canvas.create_oval(x, y, x + 40, y + 40, fill=color, outline="black")
+    canvas.create_text(x + 20, y + 20, text=text, fill="white")
+
+def get_thread_count():
+    try:
+        return max(1, int(thread_count_entry.get()))
+    except ValueError:
+        return 3  # Default value
+
+# Many-to-One Model
+def many_to_one_thread(name, index):
+    with resource_lock:
+        root.after(0, draw_thread, 100 + index * 60, 50, "blue", name)
+        log_activity(f"{name} is running on a single kernel thread")
+        time.sleep(random.uniform(1, 3))
+        log_activity(f"{name} finished execution")
+
+def many_to_one():
+    def run():
+        log_activity("Starting Many-to-One Model...")
+        canvas.delete("all")
+        num_threads = get_thread_count()
+        threads = [threading.Thread(target=many_to_one_thread, args=(f"T{i}", i)) for i in range(num_threads)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        log_activity("Many-to-One Model Completed.\n")
+    threading.Thread(target=run).start()
+
+# One-to-Many Model
+def one_to_many_worker(name, index):
+    root.after(0, draw_thread, 100 + index * 60, 150, "green", name)
+    log_activity(f"{name} starts execution in multiple kernel threads")
+    time.sleep(random.uniform(1, 3))
+    log_activity(f"{name} finished execution")
+
+def one_to_many():
+    def run():
+        log_activity("Starting One-to-Many Model...")
+        canvas.delete("all")
+        num_threads = get_thread_count()
+        kernel_threads = [threading.Thread(target=one_to_many_worker, args=(f"KThread{i}", i)) for i in range(num_threads)]
+        for kt in kernel_threads:
+            kt.start()
+        for kt in kernel_threads:
+            kt.join()
+        log_activity("One-to-Many Model Completed.\n")
+    threading.Thread(target=run).start()
+
+# Many-to-Many Model
+def many_to_many_worker(name, index):
+    with semaphore:
+        root.after(0, draw_thread, 100 + index * 60, 250, "red", name)
+        log_activity(f"{name} is accessing the resource")
+        time.sleep(random.uniform(1, 2))
+        log_activity(f"{name} released the resource")
+
+def many_to_many():
+    def run():
+        log_activity("Starting Many-to-Many Model...")
+        canvas.delete("all")
+        num_threads = get_thread_count()
+        threads = [threading.Thread(target=many_to_many_worker, args=(f"T{i}", i)) for i in range(num_threads)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        log_activity("Many-to-Many Model Completed.\n")
+    threading.Thread(target=run).start()
+
+# User input for thread count
+thread_count_label = tk.Label(root, text="Enter number of threads:")
+thread_count_label.pack()
+thread_count_entry = tk.Entry(root)
+thread_count_entry.pack()
+
+# UI Buttons
+many_to_one_button = ttk.Button(root, text="Run Many-to-One", command=many_to_one)
+many_to_one_button.pack()
+
+one_to_many_button = ttk.Button(root, text="Run One-to-Many", command=one_to_many)
+one_to_many_button.pack()
+
+many_to_many_button = ttk.Button(root, text="Run Many-to-Many", command=many_to_many)
+many_to_many_button.pack()
+
+root.mainloop()
